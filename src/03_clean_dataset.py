@@ -71,13 +71,8 @@ def main():
     for cat, count in df['category'].value_counts().items():
         print(f"  {cat:12s}: {count:6,d} ({count/len(df)*100:5.1f}%)")
 
-    # -----------------------------------------------------------------------
-    # REGOLA DI ESCLUSIONE: rimuovi solo gli articoli "space-only"
-    # (hanno termini spaziali ma ZERO termini AI o IPO)
-    # -----------------------------------------------------------------------
     noise_mask = (df['space_score'] > 0) & (df['ai_score'] + df['ipo_score'] == 0)
     df_clean = df[~noise_mask].copy()
-    # -----------------------------------------------------------------------
 
     print(f"\nArticoli rimossi (rumore spaziale): {noise_mask.sum():,}")
     print(f"Righe dopo pulizia: {len(df_clean):,} ({len(df_clean)/len(df)*100:.1f}%)")
@@ -89,16 +84,27 @@ def main():
 
     if args.dry_run:
         print("\n[DRY RUN] Nessun file scritto.")
-        # Mostra i 10 titoli rimossi come campione
         print("\nCampione di 10 titoli rimossi:")
         for t in df[noise_mask]['news_content'].head(10).tolist():
             print(f"  - {t[:120]}")
         return
 
-    # Rimuovi le colonne di scoring, tieni solo i dati originali + categoria
-    df_clean = df_clean.drop(columns=['ai_score', 'ipo_score', 'space_score'])
+    # 1. Dataset principale: tutto tranne space_only
+    df_clean = df_clean.drop(columns=['ai_score', 'ipo_score', 'space_score'], errors='ignore')
     df_clean.to_csv(args.output, index=False)
-    print(f"\nFile salvato: {args.output}")
+    print(f"\nFile principale salvato: {args.output}")
+
+    # 2. Dataset signal-only per robustness check
+    signal_only = df_clean[df_clean['category'] == 'signal'].drop(columns=['category'], errors='ignore')
+    signal_output = args.output.with_name(args.output.stem + '_signal.csv')
+    signal_only.to_csv(signal_output, index=False)
+    print(f"File signal-only salvato: {signal_output} ({len(signal_only):,} righe)")
+
+    # 3. Dataset dei rimossi (per audit e possibile recupero)
+    removed = df[noise_mask].drop(columns=['ai_score', 'ipo_score', 'space_score'], errors='ignore')
+    removed_output = args.output.with_name(args.output.stem + '_removed.csv')
+    removed.to_csv(removed_output, index=False)
+    print(f"File rimossi salvato: {removed_output} ({len(removed):,} righe) — per audit manuale")
 
 
 if __name__ == '__main__':

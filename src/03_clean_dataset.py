@@ -94,22 +94,12 @@ def main():
         for t in df[noise_mask]['news_content'].head(10).tolist():
             print(f"  - {t[:120]}")
         return
-    # 1. Dataset principale: tutto tranne space_only
-    df_clean = df_clean.drop(columns=['ai_score', 'ipo_score', 'space_score'], errors='ignore')
+
+    # Rimuovi le colonne di scoring, tieni solo i dati originali + categoria
+    df_clean = df_clean.drop(columns=['ai_score', 'ipo_score', 'space_score'])
     df_clean.to_csv(args.output, index=False)
-    print(f"\nFile principale salvato: {args.output}")
+    print(f"\nFile salvato: {args.output}")
 
-    # 2. Dataset signal-only per robustness check
-    signal_only = df_clean[df_clean['category'] == 'signal'].drop(columns=['category'], errors='ignore')
-    signal_output = args.output.with_name(args.output.stem + '_signal.csv')
-    signal_only.to_csv(signal_output, index=False)
-    print(f"File signal-only salvato: {signal_output} ({len(signal_only):,} righe)")
-
-    # 3. Dataset dei rimossi (per audit e possibile recupero)
-    removed = df[noise_mask].drop(columns=['ai_score', 'ipo_score', 'space_score'], errors='ignore')
-    removed_output = args.output.with_name(args.output.stem + '_removed.csv')
-    removed.to_csv(removed_output, index=False)
-    print(f"File rimossi salvato: {removed_output} ({len(removed):,} righe) — per audit manuale")
 
 if __name__ == '__main__':
     main()

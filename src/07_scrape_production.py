@@ -73,7 +73,8 @@ PAGE_TIMEOUT_MS    = 20_000 # Playwright page.goto() timeout
 HARDCODED_BLOCKED = {
     "forbes.com", "nytimes.com", "bloomberg.com",
     "wsj.com", "reuters.com", "techcrunch.com",
-    "zerohedge.com", "nypost.com",
+    "zerohedge.com", "nypost.com", "tomsguide.com", 
+    "fox13now.com",
 }
 
 # Known aggregator / SEO-spam / non-article domains to filter out.
@@ -207,6 +208,12 @@ def scrape_worker(
             )
             page = context.new_page()
 
+            # Hard timeout on every Playwright operation (including page.goto,
+            # page.content, wait_for_timeout, mouse actions, etc.).
+            # This catches infinite JS loops and stalled responses that
+            # PAGE_TIMEOUT_MS on page.goto alone would miss.
+            page.set_default_timeout(15_000)   # 15 seconds absolute cap
+
             # Apply playwright-stealth to mask automation fingerprints
             Stealth().use_sync(page)
 
@@ -288,14 +295,23 @@ def scrape_worker(
                     category   = "ERROR"
 
             except PlaywrightTimeoutError:
-                status_str = "TIMEOUT"
+                # Catches both page.goto timeout AND the 15-s set_default_timeout cap
+                # on any subsequent operation (scroll, content(), etc.)
+                status_str = "TIMEOUT_HARD"
                 category   = "ERROR"
             except Exception as exc:
                 status_str = type(exc).__name__
                 category   = "ERROR"
             finally:
-                page.close()
-                context.close()
+                # Always clean up — even if the page hung or threw an exception
+                try:
+                    page.close()
+                except Exception:
+                    pass
+                try:
+                    context.close()
+                except Exception:
+                    pass
 
             result = {
                 "url": url,
